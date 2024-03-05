@@ -29,6 +29,7 @@
 #include "booksim_config.hpp"
 #include "buffer_monitor.hpp"
 #include "switch_monitor.hpp"
+#include "power_monitor.hpp"
 #include "iq_router.hpp"
 
 Power_Module::Power_Module(Network * n , const Configuration &config)
@@ -492,41 +493,51 @@ void Power_Module::run(){
     calcSwitch(sm);
   }
   
-  double totalpower =  channelWirePower+channelClkPower+channelDFFPower+channelLeakPower+ inputReadPower+inputWritePower+inputLeakagePower+ switchPower+switchPowerCtrl+switchPowerLeak+outputPower+outputPowerClk+outputCtrlPower;
-  double totalarea =  channelArea+switchArea+inputArea+outputArea;
-  cout<< "-----------------------------------------\n" ;
-  cout<< "- OCN Power Summary\n" ;
-  cout<< "- Completion Time:         "<<totalTime <<"\n" ;
-  cout<< "- Flit Widths:            "<<channel_width<<"\n" ;
-  cout<< "- Channel Wire Power:      "<<channelWirePower <<"\n" ;
-  cout<< "- Channel Clock Power:     "<<channelClkPower <<"\n" ;
-  cout<< "- Channel Retiming Power:  "<<channelDFFPower <<"\n" ;
-  cout<< "- Channel Leakage Power:   "<<channelLeakPower <<"\n" ;
+  // double totalpower =  channelWirePower+channelClkPower+channelDFFPower+channelLeakPower+ inputReadPower+inputWritePower+inputLeakagePower+ switchPower+switchPowerCtrl+switchPowerLeak+outputPower+outputPowerClk+outputCtrlPower;
+  // double totalarea =  channelArea+switchArea+inputArea+outputArea;
+  // cout<< "-----------------------------------------\n" ;
+  // cout<< "- OCN Power Summary\n" ;
+  // cout<< "- Completion Time:         "<<totalTime <<"\n" ;
+  // cout<< "- Flit Widths:            "<<channel_width<<"\n" ;
+  // cout<< "- Channel Wire Power:      "<<channelWirePower <<"\n" ;
+  // cout<< "- Channel Clock Power:     "<<channelClkPower <<"\n" ;
+  // cout<< "- Channel Retiming Power:  "<<channelDFFPower <<"\n" ;
+  // cout<< "- Channel Leakage Power:   "<<channelLeakPower <<"\n" ;
   
-  cout<< "- Input Read Power:        "<<inputReadPower <<"\n" ;
-  cout<< "- Input Write Power:       "<<inputWritePower <<"\n" ;
-  cout<< "- Input Leakage Power:     "<<inputLeakagePower <<"\n" ;
+  // cout<< "- Input Read Power:        "<<inputReadPower <<"\n" ;
+  // cout<< "- Input Write Power:       "<<inputWritePower <<"\n" ;
+  // cout<< "- Input Leakage Power:     "<<inputLeakagePower <<"\n" ;
   
-  cout<< "- Switch Power:            "<<switchPower <<"\n" ;
-  cout<< "- Switch Control Power:    "<<switchPowerCtrl <<"\n" ;
-  cout<< "- Switch Leakage Power:    "<<switchPowerLeak <<"\n" ;
+  // cout<< "- Switch Power:            "<<switchPower <<"\n" ;
+  // cout<< "- Switch Control Power:    "<<switchPowerCtrl <<"\n" ;
+  // cout<< "- Switch Leakage Power:    "<<switchPowerLeak <<"\n" ;
   
-  cout<< "- Output DFF Power:        "<<outputPower <<"\n" ;
-  cout<< "- Output Clk Power:        "<<outputPowerClk <<"\n" ;
-  cout<< "- Output Control Power:    "<<outputCtrlPower <<"\n" ;
-  cout<< "- Total Power:             "<<totalpower <<"\n";
-  cout<< "-----------------------------------------\n" ;
-  cout<< "\n" ;
-  cout<< "-----------------------------------------\n" ;
-  cout<< "- OCN Area Summary\n" ;
-  cout<< "- Channel Area:  "<<channelArea<<"\n" ;
-  cout<< "- Switch  Area:  "<<switchArea<<"\n" ;
-  cout<< "- Input  Area:   "<<inputArea<<"\n" ;
-  cout<< "- Output  Area:  "<<outputArea<<"\n" ;
-  cout<< "- Total Area:    "<<totalarea<<endl;
-  cout<< "-----------------------------------------\n" ;
-
-
-
-
+  // cout<< "- Output DFF Power:        "<<outputPower <<"\n" ;
+  // cout<< "- Output Clk Power:        "<<outputPowerClk <<"\n" ;
+  // cout<< "- Output Control Power:    "<<outputCtrlPower <<"\n" ;
+  // cout<< "- Total Power:             "<<totalpower <<"\n";
+  // cout<< "-----------------------------------------\n" ;
+  // cout<< "\n" ;
+  // cout<< "-----------------------------------------\n" ;
+  // cout<< "- OCN Area Summary\n" ;
+  // cout<< "- Channel Area:  "<<channelArea<<"\n" ;
+  // cout<< "- Switch  Area:  "<<switchArea<<"\n" ;
+  // cout<< "- Input  Area:   "<<inputArea<<"\n" ;
+  // cout<< "- Output  Area:  "<<outputArea<<"\n" ;
+  // cout<< "- Total Area:    "<<totalarea<<endl;
+  // cout<< "-----------------------------------------\n" ;
+  cout << "- Per-router power summary\n";
+  for(size_t i = 0; i < routers.size(); i++){
+    IQRouter* temp = dynamic_cast<IQRouter*>(routers[i]);
+    const PowerMonitor* power_monitor = temp->GetPowerMonitor();
+    double avgPower = 0.0;
+    double maxPower = 0.0;
+    const vector<double> power_trace = power_monitor->GetPowerTrace();
+    for (size_t j = 0; j < power_trace.size(); j++) {
+      avgPower += power_trace[j];
+      maxPower = max(maxPower, power_trace[j]);
+    }
+    avgPower /= power_trace.size();
+    cout << routers[i]->Name() << ": " << avgPower << ", " << maxPower << '\n';
+  }
 }

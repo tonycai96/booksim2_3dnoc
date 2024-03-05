@@ -36,6 +36,7 @@
 #include "flitchannel.hpp"
 #include "switch_monitor.hpp"
 #include "buffer_monitor.hpp"
+#include "power_monitor.hpp"
 
 struct wire{
   double L;

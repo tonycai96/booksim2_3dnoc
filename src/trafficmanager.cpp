@@ -951,7 +951,7 @@ void TrafficManager::_Inject(){
     }
 }
 
-void TrafficManager::_Step( )
+void TrafficManager::_Step()
 {
     bool flits_in_flight = false;
     for(int c = 0; c < _classes; ++c) {
@@ -964,10 +964,10 @@ void TrafficManager::_Step( )
 
     vector<map<int, Flit *> > flits(_subnets);
   
-    for ( int subnet = 0; subnet < _subnets; ++subnet ) {
-        for ( int n = 0; n < _nodes; ++n ) {
-            Flit * const f = _net[subnet]->ReadFlit( n );
-            if ( f ) {
+    for (int subnet = 0; subnet < _subnets; ++subnet) {
+        for (int n = 0; n < _nodes; ++n) {
+            Flit * const f = _net[subnet]->ReadFlit(n);
+            if (f) {
                 if(f->watch) {
                     *gWatchOut << GetSimTime() << " | "
                                << "node" << n << " | "
@@ -1272,6 +1272,15 @@ void TrafficManager::_Step( )
         cout<<"TIME "<<_time<<endl;
     }
 
+    if (_cycleCount % 200 == 0) {
+        for(int subnet = 0; subnet < _subnets; ++subnet) {
+            vector<Router*> routers = _net[subnet]->GetRouters();
+            for (size_t i = 0; i < routers.size(); i++) {
+                routers[i]->UpdateThrottling();
+            }
+        }
+    }
+    _cycleCount++;
 }
   
 bool TrafficManager::_PacketsOutstanding( ) const
@@ -1610,6 +1619,7 @@ bool TrafficManager::_SingleSim( )
 
 bool TrafficManager::Run( )
 {
+    _cycleCount = 0;
     for ( int sim = 0; sim < _total_sims; ++sim ) {
 
         _time = 0;

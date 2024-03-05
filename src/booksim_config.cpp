@@ -314,6 +314,9 @@ BookSimConfig::BookSimConfig( )
 
   //==================Network file===========================
   AddStrField("network_file","");
+
+  // set to some really high value to not throttle by default
+  _float_map["power_threshold"] = 1000.0;
 }
 
 

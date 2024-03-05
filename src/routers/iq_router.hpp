@@ -47,6 +47,7 @@ class BufferState;
 class Allocator;
 class SwitchMonitor;
 class BufferMonitor;
+class PowerMonitor;
 
 class IQRouter : public Router {
 
@@ -145,8 +146,10 @@ class IQRouter : public Router {
   //
   // ----------------------------------------
 
-  SwitchMonitor * _switchMonitor ;
-  BufferMonitor * _bufferMonitor ;
+  SwitchMonitor * _switchMonitor;
+  BufferMonitor * _bufferMonitor;
+  PowerMonitor * _powerMonitor;
+  double _powerThreshold;
   
 public:
 
@@ -177,7 +180,9 @@ public:
 
   SwitchMonitor const * const GetSwitchMonitor() const {return _switchMonitor;}
   BufferMonitor const * const GetBufferMonitor() const {return _bufferMonitor;}
+  PowerMonitor const * const GetPowerMonitor() const {return _powerMonitor;}
 
+  void UpdateThrottling() override;
 };
 
 #endif

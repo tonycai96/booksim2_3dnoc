@@ -46,11 +46,15 @@
 #include "allocator.hpp"
 #include "switch_monitor.hpp"
 #include "buffer_monitor.hpp"
+#include "power_monitor.hpp"
 
 IQRouter::IQRouter( Configuration const & config, Module *parent, 
 		    string const & name, int id, int inputs, int outputs )
 : Router( config, parent, name, id, inputs, outputs ), _active(false)
 {
+  _fcCycleCount = 0.0;
+  _throttleRate = 1.0;
+
   _vcs         = config.GetInt( "num_vcs" );
 
   _vc_busy_when_full = (config.GetInt("vc_busy_when_full") > 0);
@@ -170,6 +174,7 @@ IQRouter::IQRouter( Configuration const & config, Module *parent,
 
   _bufferMonitor = new BufferMonitor(inputs, _classes);
   _switchMonitor = new SwitchMonitor(inputs, outputs, _classes);
+  _powerMonitor = new PowerMonitor(config, inputs, outputs);
 
 #ifdef TRACK_FLOWS
   for(int c = 0; c < _classes; ++c) {
@@ -178,6 +183,8 @@ IQRouter::IQRouter( Configuration const & config, Module *parent,
   }
   _outstanding_classes.resize(_outputs, vector<queue<int> >(_vcs));
 #endif
+
+  _powerThreshold = config.GetFloat("power_threshold");
 }
 
 IQRouter::~IQRouter( )
@@ -232,46 +239,50 @@ void IQRouter::_InternalStep( )
   _InputQueuing( );
   bool activity = !_proc_credits.empty();
 
-  if(!_route_vcs.empty())
-    _RouteEvaluate( );
-  if(_vc_allocator) {
-    _vc_allocator->Clear();
-    if(!_vc_alloc_vcs.empty())
-      _VCAllocEvaluate( );
-  }
-  if(_hold_switch_for_packet) {
-    if(!_sw_hold_vcs.empty())
-      _SWHoldEvaluate( );
-  }
-  _sw_allocator->Clear();
-  if(_spec_sw_allocator)
-    _spec_sw_allocator->Clear();
-  if(!_sw_alloc_vcs.empty())
-    _SWAllocEvaluate( );
-  if(!_crossbar_flits.empty())
-    _SwitchEvaluate( );
-
-  if(!_route_vcs.empty()) {
-    _RouteUpdate( );
-    activity = activity || !_route_vcs.empty();
-  }
-  if(!_vc_alloc_vcs.empty()) {
-    _VCAllocUpdate( );
-    activity = activity || !_vc_alloc_vcs.empty();
-  }
-  if(_hold_switch_for_packet) {
-    if(!_sw_hold_vcs.empty()) {
-      _SWHoldUpdate( );
-      activity = activity || !_sw_hold_vcs.empty();
+  _fcCycleCount += _throttleRate;
+  if (_fcCycleCount >= 1.0) {
+    if(!_route_vcs.empty())
+      _RouteEvaluate( );
+    if(_vc_allocator) {
+      _vc_allocator->Clear();
+      if(!_vc_alloc_vcs.empty())
+        _VCAllocEvaluate( );
     }
-  }
-  if(!_sw_alloc_vcs.empty()) {
-    _SWAllocUpdate( );
-    activity = activity || !_sw_alloc_vcs.empty();
-  }
-  if(!_crossbar_flits.empty()) {
-    _SwitchUpdate( );
-    activity = activity || !_crossbar_flits.empty();
+    if(_hold_switch_for_packet) {
+      if(!_sw_hold_vcs.empty())
+        _SWHoldEvaluate( );
+    }
+    _sw_allocator->Clear();
+    if(_spec_sw_allocator)
+      _spec_sw_allocator->Clear();
+    if(!_sw_alloc_vcs.empty())
+      _SWAllocEvaluate( );
+    if(!_crossbar_flits.empty())
+      _SwitchEvaluate( );
+
+    if(!_route_vcs.empty()) {
+      _RouteUpdate( );
+      activity = activity || !_route_vcs.empty();
+    }
+    if(!_vc_alloc_vcs.empty()) {
+      _VCAllocUpdate( );
+      activity = activity || !_vc_alloc_vcs.empty();
+    }
+    if(_hold_switch_for_packet) {
+      if(!_sw_hold_vcs.empty()) {
+        _SWHoldUpdate( );
+        activity = activity || !_sw_hold_vcs.empty();
+      }
+    }
+    if(!_sw_alloc_vcs.empty()) {
+      _SWAllocUpdate( );
+      activity = activity || !_sw_alloc_vcs.empty();
+    }
+    if(!_crossbar_flits.empty()) {
+      _SwitchUpdate( );
+      activity = activity || !_crossbar_flits.empty();
+    }
+    _fcCycleCount -= 1.0;
   }
 
   _active = activity;
@@ -280,6 +291,7 @@ void IQRouter::_InternalStep( )
 
   _bufferMonitor->cycle( );
   _switchMonitor->cycle( );
+  _powerMonitor->Step();
 }
 
 void IQRouter::WriteOutputs( )
@@ -2194,6 +2206,7 @@ void IQRouter::_SwitchUpdate( )
 		 << "." << endl;
     }
     _switchMonitor->traversal(input, output, f) ;
+    _powerMonitor->CrossbarTraversal(input, output);
 
     if(f->watch) {
       *gWatchOut << GetSimTime() << " | " << FullName() << " | "
@@ -2381,5 +2394,13 @@ void IQRouter::_UpdateNOQ(int input, int vc, Flit const * f) {
 		 << "Computing lookahead routing information for flit " << f->id
 		 << " (NOQ)." << endl;
     }
+  }
+}
+
+void IQRouter::UpdateThrottling() {
+  if (_powerMonitor->GetRecentPowerUsage() > _powerThreshold) {
+    _throttleRate *= 0.8;
+  } else if (_powerMonitor->GetRecentPowerUsage() < _powerThreshold && _throttleRate < 1.0) {
+    _throttleRate /= 0.8;
   }
 }

@@ -90,6 +90,11 @@ protected:
 
   virtual void _InternalStep() = 0;
 
+  // 0.0 = completely throttled, 1.0 = full speed
+  double _throttleRate;
+  double _fcCycleCount;
+
+
 public:
   Router( const Configuration& config,
 	  Module *parent, const string & name, int id,
@@ -98,6 +103,8 @@ public:
   static Router *NewRouter( const Configuration& config,
 			    Module *parent, const string & name, int id,
 			    int inputs, int outputs );
+
+  virtual void UpdateThrottling() {};
 
   virtual void AddInputChannel( FlitChannel *channel, CreditChannel *backchannel );
   virtual void AddOutputChannel( FlitChannel *channel, CreditChannel *backchannel );

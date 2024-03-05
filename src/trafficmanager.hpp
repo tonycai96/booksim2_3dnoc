@@ -54,6 +54,7 @@ private:
   vector<vector<int> > _packet_size;
   vector<vector<int> > _packet_size_rate;
   vector<int> _packet_size_max_val;
+  int _cycleCount;
 
 protected:
   int _nodes;
