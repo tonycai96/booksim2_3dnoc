@@ -130,7 +130,7 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
     }
     result = new BadPermDFlyTrafficPattern(nodes, k, n);
   } else if((pattern_name == "tornado") || (pattern_name == "neighbor") ||
-	    (pattern_name == "badperm_yarc")) {
+	    (pattern_name == "badperm_yarc") || (pattern_name == "allreduce")) {
     bool missing_params = false;
     int k = -1;
     if(params.size() < 1) {
@@ -170,6 +170,8 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
       result = new TornadoTrafficPattern(nodes, k, n, xr);
     } else if(pattern_name == "neighbor") {
       result = new NeighborTrafficPattern(nodes, k, n, xr);
+    } else if(pattern_name == "allreduce") {
+      result = new AllReduceTrafficPattern(nodes, k, n, xr);
     } else if(pattern_name == "badperm_yarc") {
       result = new BadPermYarcTrafficPattern(nodes, k, n, xr);
     }
@@ -326,6 +328,51 @@ int NeighborTrafficPattern::dest(int source)
     offset *= (_xr * _k);
   }
   return result;
+}
+
+AllReduceTrafficPattern::AllReduceTrafficPattern(int nodes, int k, int n, int xr)
+  : DigitPermutationTrafficPattern(nodes, k, n, xr)
+{
+  // restrict to 3D meshes for simplicity
+  assert(n == 3);
+}
+
+/*
+ * In AllReduce, all nodes are mapped to a logical ring along which traffic
+ * flows. For best efficiency, this should take the form of a "snake" pattern,
+ * filling up one 2-dimensional layer at a time before proceeding to the next.
+ */
+int AllReduceTrafficPattern::dest(int source)
+{
+  // "layer" as in a 3D layer
+  int nodes_per_layer = _k * _k;
+  int layer = source / nodes_per_layer;
+  int node_in_layer = source % nodes_per_layer;
+  bool layer_is_even = (layer % 2 == 0);
+  int row = node_in_layer / _k;
+  bool row_is_even = (row % 2 == 0);
+  bool reverse = layer_is_even ^ row_is_even;
+
+  bool end_of_row =  reverse ? (source % _k == 0) : (source % _k == (_k - 1));
+
+  bool end_of_layer;
+  if (layer_is_even) end_of_layer = (node_in_layer == (_k * (_k - 1)));
+  else end_of_layer = (node_in_layer == 0);
+
+  bool end_of_cube = source == (_nodes - 1);
+
+
+  int dest;
+  if (end_of_cube) dest = 0;
+
+  else if (end_of_layer) dest = (source + nodes_per_layer) % _nodes;
+
+  else {
+    if (reverse) dest = source - (end_of_row ? _k : 1);
+    else dest = source + (end_of_row ? _k : 1);
+  }
+
+  return dest;
 }
 
 RandomPermutationTrafficPattern::RandomPermutationTrafficPattern(int nodes, 

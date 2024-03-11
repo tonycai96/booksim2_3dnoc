@@ -102,6 +102,12 @@ public:
   virtual int dest(int source);
 };
 
+class AllReduceTrafficPattern : public DigitPermutationTrafficPattern {
+public:
+  AllReduceTrafficPattern(int nodes, int k, int n, int xr = 1);
+  virtual int dest(int source);
+};
+
 class RandomPermutationTrafficPattern : public TrafficPattern {
 private:
   vector<int> _dest;
