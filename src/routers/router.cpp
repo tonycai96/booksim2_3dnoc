@@ -85,6 +85,7 @@ TimedModule( parent, name ), _id( id ), _inputs( inputs ), _outputs( outputs ),
   _crossbar_conflict_stalls.resize(_classes, 0);
 #endif
 
+  powerThreshold = 1000.0;
 }
 
 void Router::AddInputChannel( FlitChannel *channel, CreditChannel *backchannel )

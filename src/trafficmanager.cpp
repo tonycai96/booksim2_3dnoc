@@ -39,6 +39,8 @@
 #include "random_utils.hpp" 
 #include "vc.hpp"
 #include "packet_reply_info.hpp"
+#include "iq_router.hpp"
+#include "power_monitor.hpp"
 
 TrafficManager * TrafficManager::New(Configuration const & config,
                                      vector<Network *> const & net)
@@ -1272,10 +1274,11 @@ void TrafficManager::_Step()
         cout<<"TIME "<<_time<<endl;
     }
 
-    if (_cycleCount % 200 == 0) {
+    if (_cycleCount % 500 == 0) {
         for(int subnet = 0; subnet < _subnets; ++subnet) {
             vector<Router*> routers = _net[subnet]->GetRouters();
             for (size_t i = 0; i < routers.size(); i++) {
+                IQRouter* router = dynamic_cast<IQRouter*>(routers[i]);
                 routers[i]->UpdateThrottling();
             }
         }
@@ -1659,6 +1662,14 @@ bool TrafficManager::Run( )
 
         // Empty any remaining packets
         cout << "Draining remaining packets ..." << endl;
+
+        // TODO: check if this is valid or not. Simulation tends to report deadlocks etc.
+        // if some routers are heavily throttled during draining.
+        vector<Router*> routers = _net[0]->GetRouters();
+        for (size_t i = 0; i < routers.size(); i++) {
+            routers[i]->_throttleRate = 1.0;
+        }
+
         _empty_network = true;
         int empty_steps = 0;
 

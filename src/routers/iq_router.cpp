@@ -183,8 +183,6 @@ IQRouter::IQRouter( Configuration const & config, Module *parent,
   }
   _outstanding_classes.resize(_outputs, vector<queue<int> >(_vcs));
 #endif
-
-  _powerThreshold = config.GetFloat("power_threshold");
 }
 
 IQRouter::~IQRouter( )
@@ -233,6 +231,7 @@ void IQRouter::ReadInputs( )
 void IQRouter::_InternalStep( )
 {
   if(!_active) {
+    _powerMonitor->Step();
     return;
   }
 
@@ -2398,9 +2397,19 @@ void IQRouter::_UpdateNOQ(int input, int vc, Flit const * f) {
 }
 
 void IQRouter::UpdateThrottling() {
-  if (_powerMonitor->GetRecentPowerUsage() > _powerThreshold) {
-    _throttleRate *= 0.8;
-  } else if (_powerMonitor->GetRecentPowerUsage() < _powerThreshold && _throttleRate < 1.0) {
-    _throttleRate /= 0.8;
+  if (powerThreshold < 0.0) {
+    return;
   }
+  if (_powerMonitor->GetRecentPowerUsage() > powerThreshold && _throttleRate >= 0.4) {
+    _throttleRate -= 0.2;
+  } else if (_powerMonitor->GetRecentPowerUsage() < powerThreshold && _throttleRate <= 0.8) {
+    _throttleRate += 0.2;
+  }
+  if (_powerMonitor->GetRecentPowerUsage() < 0.01) {
+    _throttleRate = 1.0;
+  }
+  // if (_throttleRate < 0.01) {
+  //   cout << Name() << ": " << _powerMonitor->GetRecentPowerUsage() << "\n";
+  // }
+  _powerMonitor->power_trace.clear();
 }

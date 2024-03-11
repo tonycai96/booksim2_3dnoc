@@ -31,15 +31,15 @@
 
 topology = mesh;
 k = 4;
-n = 3;
+n = 2;
 
 // Routing
-routing_function = adaptive_xy_yx_then_z;
+routing_function = adaptive_xy_yx;
 
 // Flow control
 num_vcs     = 8;
 vc_buf_size = 8;
-wait_for_tail_credit = 0;
+wait_for_tail_credit = 1;
 
 // Router architecture
 vc_allocator = islip;
@@ -57,21 +57,17 @@ internal_speedup  = 1.0;
 
 
 // Traffic
-traffic = uniform;
-packet_size = 34;
+traffic = transpose;
+packet_size = 20;
 
 
 // Simulation
-warmup_periods = 20;
-max_samples = 40;
+channel_width = 512;
 sim_type = latency;
 sim_power = 1;
-channel_width = 768;
-power_threshold = 3.0;
-latency_thres = 2000.0;
-deadlock_warn_timeout=1000;
-
 tech_file = power/techfile.txt;
-stats_out = base.m;
+power_threshold = 1.8;
+sample_period = 20000;
+latency_thres = 1000.0;
 
-injection_rate = 0.001;
+injection_rate = 0.005;

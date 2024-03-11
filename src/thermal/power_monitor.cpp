@@ -69,8 +69,8 @@ PowerMonitor::PowerMonitor(const Configuration &config, int inputs, int outputs)
   _switchPowerLeak = 0.0;
   _switchPower = 0.0;
   _switchCtrlPower = 0.0;
-  _recentPowerUsage = 0.0;
-  _cycleCount = 0;
+  _outputPower = 0.0;
+  _outputCtrlPower = 0.0;
 }
 
 PowerMonitor::~PowerMonitor() {}
@@ -143,27 +143,50 @@ double PowerMonitor::powerCrossbarLeak(double width) const {
     return 0.5 * (IoffN + 2 * IoffP)*width*(inputs*outputs*Cxi+inputs*Cti+outputs*Cti)/Ci;
 }
 
+double PowerMonitor::powerWireDFF(double M, double W, double alpha) const {
+  double Cdin = 2 * 0.8 * (Ci + Co) + 2 * ( 2.0/3.0 * 0.8 * Co )  ;
+  double Cclk = 2 * 0.8 * (Ci + Co) + 2 * ( 2.0/3.0 * 0.8 * Cg_pwr) ;
+  double Cint = (alpha * 0.5) * Cdin + alpha * Cclk ;
+  
+  return Cint * M * W * (Vdd*Vdd) * fCLK ;
+}
+
+double PowerMonitor::powerOutputCtrl(double width) const {
+    double Woutmod = channel_width * ChannelPitch ;
+    double Cen     = Ci ;
+    double Cenable = (1 + 5.0/16.0)*(1.0+Co/Ci)*(Woutmod* Cw + width* Cen) ;
+
+    return Cenable * (Vdd*Vdd) * fCLK ;
+}
+
 void PowerMonitor::CrossbarTraversal(int input, int output) {
     _switchPowerLeak += powerCrossbarLeak(channel_width);
     double Px = powerCrossbar(channel_width, input, output);
-	_switchPower += channel_width * Px;
-	_switchCtrlPower += powerCrossbarCtrl(channel_width);
+    _switchPower += channel_width * Px;
+    _switchCtrlPower += powerCrossbarCtrl(channel_width);
+    _outputPower += powerWireDFF(1.0, channel_width, 1.0);
+    _outputCtrlPower += powerOutputCtrl(channel_width);
 }
 
 void PowerMonitor::Step() {
-    double power_usage = _switchPowerLeak + _switchPower + _switchCtrlPower;
-    _power_trace.push_back(power_usage);
-    _recentPowerUsage += power_usage;
-    if (_cycleCount >= 100) {
-        _recentPowerUsage -= _power_trace[_cycleCount - 100];
-    }
+    double power_usage =
+      _switchPowerLeak + _switchPower + _switchCtrlPower + _outputPower + _outputCtrlPower;
+    power_trace.push_back(power_usage);
 
-    _cycleCount++;
     _switchPowerLeak = 0.0;
     _switchPower = 0.0;
     _switchCtrlPower = 0.0;
+    _outputPower = 0.0;
+    _outputCtrlPower = 0.0;
 }
 
 double PowerMonitor::GetRecentPowerUsage() const {
-    return _recentPowerUsage / 100;
+  if (power_trace.empty()) {
+    return 0.0;
+  }
+  double sum = 0.0;
+  for (size_t i = 0; i < power_trace.size(); i++) {
+    sum += power_trace[i];
+  }
+  return sum / power_trace.size();
 }

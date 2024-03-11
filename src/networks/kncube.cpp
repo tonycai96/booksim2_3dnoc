@@ -36,6 +36,7 @@
 #include <sstream>
 #include <ctime>
 #include <cassert>
+#include <math.h>
 #include "kncube.hpp"
 #include "random_utils.hpp"
 #include "misc_utils.hpp"
@@ -90,12 +91,18 @@ void KNCube::_BuildNet( const Configuration &config )
     
     if ( _k > 1 ) {
       for ( int dim_offset = _size / _k; dim_offset >= 1; dim_offset /= _k ) {
-	router_name << "_" << ( node / dim_offset ) % _k;
+	      router_name << "_" << ( node / dim_offset ) % _k;
       }
     }
 
     _routers[node] = Router::NewRouter( config, this, router_name.str( ), 
 					node, 2*_n + 1, 2*_n + 1 );
+    int level = node / _k / _k;
+    if (config.GetFloat("power_threshold") > 0) {
+      _routers[node]->powerThreshold = config.GetFloat("power_threshold");
+    } else {
+      _routers[node]->powerThreshold = -1.0;
+    }
     _timed_modules.push_back(_routers[node]);
 
     router_name.str("");

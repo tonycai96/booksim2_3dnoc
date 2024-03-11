@@ -401,6 +401,136 @@ void fattree_anca( const Router *r, const Flit *f,
 
 int dor_next_mesh( int cur, int dest, bool descending = false );
 
+void adaptive_z_deterministic_xy(
+  const Router *r, const Flit *f, int in_channel, OutputSet *outputs, bool inject) {
+  int vcBegin = 0, vcEnd = gNumVCs-1;
+  if ( f->type == Flit::READ_REQUEST ) {
+    vcBegin = gReadReqBeginVC;
+    vcEnd = gReadReqEndVC;
+  } else if ( f->type == Flit::WRITE_REQUEST ) {
+    vcBegin = gWriteReqBeginVC;
+    vcEnd = gWriteReqEndVC;
+  } else if ( f->type ==  Flit::READ_REPLY ) {
+    vcBegin = gReadReplyBeginVC;
+    vcEnd = gReadReplyEndVC;
+  } else if ( f->type ==  Flit::WRITE_REPLY ) {
+    vcBegin = gWriteReplyBeginVC;
+    vcEnd = gWriteReplyEndVC;
+  }
+  assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
+
+  int out_port;
+
+  if(inject) {
+    out_port = -1;
+  } else if (r->GetID() == f->dest) {
+    // at destination router, we don't need to separate VCs by dim order
+    out_port = 2*gN;
+  } else {
+    int layer_cur = r->GetID() / gK / gK;
+    int layer_dst = f->dest / gK / gK;
+    if (layer_cur == layer_dst) {
+      out_port = dor_next_mesh(r->GetID(), f->dest, false);
+    } else {
+      // up = VC0, down = VC1
+      int out_port_intra_layer = dor_next_mesh(r->GetID(), f->dest, false);
+      int out_port_inter_layer = layer_dst > layer_cur ? 2*2 + 1 : 2*2;
+      int usage_intra_layer = r->GetBufferOccupancy(out_port_intra_layer) / r->ThrottleRate();
+      int usage_inter_layer = r->GetBufferOccupancy(out_port_inter_layer) / r->ThrottleRate();
+      if (usage_inter_layer < usage_intra_layer) {
+        if (layer_dst > layer_cur) {
+          vcEnd -= 2;
+        } else {
+          vcBegin += 2;
+        }
+        out_port = out_port_inter_layer;
+      } else {
+        out_port = out_port_intra_layer;
+      }
+    }
+    out_port = dor_next_mesh(r->GetID(), f->dest);
+  }
+  outputs->Clear();
+
+  outputs->AddRange(out_port, vcBegin, vcEnd);
+}
+
+void adaptive_xy_yx_then_z_mesh( const Router *r, const Flit *f, 
+		 int in_channel, OutputSet *outputs, bool inject )
+{
+  int vcBegin = 0, vcEnd = gNumVCs-1;
+  if ( f->type == Flit::READ_REQUEST ) {
+    vcBegin = gReadReqBeginVC;
+    vcEnd = gReadReqEndVC;
+  } else if ( f->type == Flit::WRITE_REQUEST ) {
+    vcBegin = gWriteReqBeginVC;
+    vcEnd = gWriteReqEndVC;
+  } else if ( f->type ==  Flit::READ_REPLY ) {
+    vcBegin = gReadReplyBeginVC;
+    vcEnd = gReadReplyEndVC;
+  } else if ( f->type ==  Flit::WRITE_REPLY ) {
+    vcBegin = gWriteReplyBeginVC;
+    vcEnd = gWriteReplyEndVC;
+  }
+  assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
+
+  int out_port;
+
+  if(inject) {
+
+    out_port = -1;
+
+  } else if(r->GetID() == f->dest) {
+
+    // at destination router, we don't need to separate VCs by dim order
+    out_port = 2*gN;
+
+  } else {
+
+    //each class must have at least 2 vcs assigned or else xy_yx will deadlock
+    int const available_vcs = (vcEnd - vcBegin + 1) / 2;
+    assert(available_vcs > 0);
+    
+    if ((r->GetID() - 1) % (gK*gK) != 0) {
+      // Need to route horizontally first
+      int out_port_xy = dor_next_mesh( r->GetID(), f->dest, false );
+      int out_port_yx = dor_next_mesh( r->GetID(), f->dest, true );
+
+      // Route order (XY or YX) determined when packet is injected
+      // into the network, adaptively
+      bool x_then_y;
+      if(in_channel < 2*gN){
+        x_then_y =  (f->vc < (vcBegin + available_vcs));
+      } else {
+        int credit_xy = r->GetUsedCredit(out_port_xy);
+        int credit_yx = r->GetUsedCredit(out_port_yx);
+        if(credit_xy > credit_yx) {
+    x_then_y = false;
+        } else if(credit_xy < credit_yx) {
+    x_then_y = true;
+        } else {
+    x_then_y = (RandomInt(1) > 0);
+        }
+      }
+      
+      if(x_then_y) {
+        out_port = out_port_xy;
+        vcEnd -= available_vcs;
+      } else {
+        out_port = out_port_yx;
+        vcBegin += available_vcs;
+      }
+    } else {
+      // any VC can be used for routing in Z direction
+      out_port = dor_next_mesh(r->GetID(), f->dest, true);
+    }
+  }
+
+  outputs->Clear();
+
+  outputs->AddRange( out_port , vcBegin, vcEnd );
+}
+
 void adaptive_xy_yx_mesh( const Router *r, const Flit *f, 
 		 int in_channel, OutputSet *outputs, bool inject )
 {
@@ -470,7 +600,6 @@ void adaptive_xy_yx_mesh( const Router *r, const Flit *f,
   outputs->Clear();
 
   outputs->AddRange( out_port , vcBegin, vcEnd );
-  
 }
 
 void xy_yx_mesh( const Router *r, const Flit *f, 
@@ -1996,4 +2125,7 @@ void InitializeRoutingMap( const Configuration & config )
 
   gRoutingFunctionMap["chaos_mesh"]  = &chaos_mesh;
   gRoutingFunctionMap["chaos_torus"] = &chaos_torus;
+
+  gRoutingFunctionMap["adaptive_xy_yx_then_z_mesh"] = &adaptive_xy_yx_then_z_mesh;
+  gRoutingFunctionMap["adaptive_z_deterministic_xy_mesh"] = &adaptive_z_deterministic_xy;
 }

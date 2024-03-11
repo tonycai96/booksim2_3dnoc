@@ -91,7 +91,6 @@ protected:
   virtual void _InternalStep() = 0;
 
   // 0.0 = completely throttled, 1.0 = full speed
-  double _throttleRate;
   double _fcCycleCount;
 
 
@@ -204,6 +203,11 @@ public:
 
   inline int NumInputs() const {return _inputs;}
   inline int NumOutputs() const {return _outputs;}
+
+  inline double ThrottleRate() const { return _throttleRate; }
+  double _throttleRate;
+
+  double powerThreshold;
 };
 
 #endif

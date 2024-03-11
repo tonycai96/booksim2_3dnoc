@@ -149,7 +149,6 @@ class IQRouter : public Router {
   SwitchMonitor * _switchMonitor;
   BufferMonitor * _bufferMonitor;
   PowerMonitor * _powerMonitor;
-  double _powerThreshold;
   
 public:
 

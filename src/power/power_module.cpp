@@ -371,7 +371,6 @@ double Power_Module::powerCrossbar(double width, double inputs, double outputs, 
 
 
 double Power_Module::powerCrossbarCtrl(double width, double inputs, double outputs){
- 
   // datapath traversal power
   double Wxbar = width * outputs * CrossbarPitch ;
   double Hxbar = width * inputs  * CrossbarPitch ;
@@ -387,7 +386,6 @@ double Power_Module::powerCrossbarCtrl(double width, double inputs, double outpu
   double Cdrive = (5.0/16.0) * (1 + Co_delay/Ci_delay) * Cctrl ;
 
   return (Cdrive + Cctrl) * (Vdd*Vdd) * fCLK ;
-  
 }
 
 double Power_Module::powerCrossbarLeak (double width, double inputs, double outputs){
@@ -525,19 +523,13 @@ void Power_Module::run(){
   // cout<< "- Input  Area:   "<<inputArea<<"\n" ;
   // cout<< "- Output  Area:  "<<outputArea<<"\n" ;
   // cout<< "- Total Area:    "<<totalarea<<endl;
-  // cout<< "-----------------------------------------\n" ;
-  cout << "- Per-router power summary\n";
-  for(size_t i = 0; i < routers.size(); i++){
-    IQRouter* temp = dynamic_cast<IQRouter*>(routers[i]);
-    const PowerMonitor* power_monitor = temp->GetPowerMonitor();
-    double avgPower = 0.0;
-    double maxPower = 0.0;
-    const vector<double> power_trace = power_monitor->GetPowerTrace();
-    for (size_t j = 0; j < power_trace.size(); j++) {
-      avgPower += power_trace[j];
-      maxPower = max(maxPower, power_trace[j]);
-    }
-    avgPower /= power_trace.size();
-    cout << routers[i]->Name() << ": " << avgPower << ", " << maxPower << '\n';
+
+  cout << "-----------------------------------------\n";
+  cout << "Per-router stats\n";
+  for (size_t i = 0; i < routers.size(); i++) {
+      IQRouter* router = dynamic_cast<IQRouter*>(routers[i]);
+      const PowerMonitor* power_monitor = router->GetPowerMonitor();
+      cout << router->Name() << ": " << power_monitor->GetRecentPowerUsage()
+          << " " << router->ThrottleRate() << "\n";
   }
 }

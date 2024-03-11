@@ -104,19 +104,17 @@ protected:
   double _switchPowerLeak;
   double _switchPower;
   double _switchCtrlPower;
+  double _outputPower;
+  double _outputCtrlPower;
 
   int inputs;
   int outputs;
 
-  vector<double> _power_trace;
-
-  // TOOD: integrate power trace with thermal model and use temperature
-  double _recentPowerUsage;
-  int _cycleCount;
-
   double powerCrossbarLeak(double width) const;
   double powerCrossbarCtrl(double width) const;
   double powerCrossbar(double width, double from, double to) const;
+  double powerWireDFF(double M, double W, double alpha) const;
+  double powerOutputCtrl(double width) const;
 
 public:
   PowerMonitor(const Configuration &config, int inputs, int outputs);
@@ -125,6 +123,6 @@ public:
   void CrossbarTraversal(int input, int output);
   void Step();
   double GetRecentPowerUsage() const;
-  vector<double> GetPowerTrace() const {return _power_trace;}
+  vector<double> power_trace;
 };
 #endif
