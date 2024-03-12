@@ -333,6 +333,9 @@ int NeighborTrafficPattern::dest(int source)
 AllReduceTrafficPattern::AllReduceTrafficPattern(int nodes, int k, int n, int xr)
   : DigitPermutationTrafficPattern(nodes, k, n, xr)
 {
+  // restrict to even k for simplicity
+  assert(k % 2 == 0);
+
   // restrict to 3D meshes for simplicity
   assert(n == 3);
 }
@@ -359,17 +362,20 @@ int AllReduceTrafficPattern::dest(int source)
   if (layer_is_even) end_of_layer = (node_in_layer == (_k * (_k - 1)));
   else end_of_layer = (node_in_layer == 0);
 
-  bool end_of_cube = source == (_nodes - 1);
-
 
   int dest;
-  if (end_of_cube) dest = 0;
 
-  else if (end_of_layer) dest = (source + nodes_per_layer) % _nodes;
+  if (end_of_layer) dest = (source + nodes_per_layer) % _nodes;
 
   else {
-    if (reverse) dest = source - (end_of_row ? _k : 1);
-    else dest = source + (end_of_row ? _k : 1);
+    if (reverse) {
+      if (layer_is_even) dest = source + ((end_of_row) ? _k : -1);
+      else dest = source + ((end_of_row) ? -_k : -1);
+    }
+    else {
+      if (layer_is_even) dest = source + ((end_of_row) ? _k : 1);
+      else dest = source + ((end_of_row) ? -_k : 1);
+    }
   }
 
   return dest;
