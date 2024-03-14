@@ -74,7 +74,9 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
   vector<string> params = tokenize_str(param_str);
 
   InjectionProcess * result = NULL;
-  if(process_name == "bernoulli") {
+  if (config->GetInt("src_router") != -1) {
+    result = new SingleSourceBernoulliInjectionProcess(nodes, load, config->GetInt("src_router"));
+  } else if(process_name == "bernoulli") {
     result = new BernoulliInjectionProcess(nodes, load);
   } else if(process_name == "on_off") {
     bool missing_params = false;
@@ -130,6 +132,21 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
     exit(-1);
   }
   return result;
+}
+
+//=============================================================
+
+SingleSourceBernoulliInjectionProcess::SingleSourceBernoulliInjectionProcess(
+  int nodes, double rate, int src)
+  : InjectionProcess(nodes, rate)
+{
+  _src_node = src;
+}
+
+bool SingleSourceBernoulliInjectionProcess::test(int source)
+{
+  assert((source >= 0) && (source < _nodes));
+  return _src_node == source && RandomFloat() < _rate;
 }
 
 //=============================================================

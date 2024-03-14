@@ -524,12 +524,12 @@ void Power_Module::run(){
   // cout<< "- Output  Area:  "<<outputArea<<"\n" ;
   // cout<< "- Total Area:    "<<totalarea<<endl;
 
-  cout << "-----------------------------------------\n";
-  cout << "Per-router stats\n";
-  for (size_t i = 0; i < routers.size(); i++) {
-      IQRouter* router = dynamic_cast<IQRouter*>(routers[i]);
-      const PowerMonitor* power_monitor = router->GetPowerMonitor();
-      cout << router->Name() << ": " << power_monitor->GetRecentPowerUsage()
-          << " " << router->ThrottleRate() << "\n";
-  }
+  // cout << "-----------------------------------------\n";
+  // cout << "Per-router stats\n";
+  // for (size_t i = 0; i < routers.size(); i++) {
+  //     IQRouter* router = dynamic_cast<IQRouter*>(routers[i]);
+  //     const PowerMonitor* power_monitor = router->GetPowerMonitor();
+  //     cout << router->Name() << ": " << power_monitor->GetRecentPowerUsage()
+  //         << " " << router->ThrottleRate() << "\n";
+  // }
 }

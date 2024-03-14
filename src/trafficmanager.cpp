@@ -114,6 +114,10 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
         }
     }
 
+    if (config.GetInt("bad_router") != -1) {
+        gIsBadRouter[config.GetInt("bad_router")] = true;
+    }
+
     // ============ Traffic ============ 
 
     _classes = config.GetInt("classes");

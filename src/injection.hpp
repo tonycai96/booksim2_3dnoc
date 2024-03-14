@@ -45,6 +45,15 @@ public:
 				Configuration const * const config = NULL);
 };
 
+class SingleSourceBernoulliInjectionProcess : public InjectionProcess {
+public:
+  SingleSourceBernoulliInjectionProcess(int nodes, double rate, int src);
+  virtual bool test(int source);
+
+private:
+  int _src_node;
+};
+
 class BernoulliInjectionProcess : public InjectionProcess {
 public:
   BernoulliInjectionProcess(int nodes, double rate);

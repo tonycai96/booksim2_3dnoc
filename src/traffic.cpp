@@ -65,7 +65,9 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
   vector<string> params = tokenize_str(param_str);
   
   TrafficPattern * result = NULL;
-  if(pattern_name == "bitcomp") {
+  if (pattern_name == "single_path") {
+    result = new SinglePathTrafficPattern(nodes, config->GetInt("dest_router"));
+  } else if(pattern_name == "bitcomp") {
     result = new BitCompTrafficPattern(nodes);
   } else if(pattern_name == "transpose") {
     result = new TransposeTrafficPattern(nodes);
@@ -198,6 +200,15 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
     exit(-1);
   }
   return result;
+}
+
+SinglePathTrafficPattern::SinglePathTrafficPattern(int nodes, int dst) : TrafficPattern(nodes) {
+  _dest_node = dst;
+}
+
+int SinglePathTrafficPattern::dest(int source)
+{
+  return _dest_node;
 }
 
 PermutationTrafficPattern::PermutationTrafficPattern(int nodes)

@@ -39,6 +39,7 @@
 #include <map>
 #include <cstdlib>
 #include <cassert>
+#include <bitset>
 
 #include "booksim.hpp"
 #include "routefunc.hpp"
@@ -53,6 +54,7 @@
 
 
 map<string, tRoutingFunction> gRoutingFunctionMap;
+bitset<1024> gIsBadRouter;
 
 /* Global information used by routing functions */
 
@@ -771,6 +773,9 @@ void dor_next_torus( int cur, int dest, int in_port,
 
 void dim_order_mesh( const Router *r, const Flit *f, int in_channel, OutputSet *outputs, bool inject )
 {
+  if (r != NULL) {
+    cout << "dim_order_mesh " << r->GetID() << " " << in_channel << " " << f->dest << "\n";
+  }
   int out_port = inject ? -1 : dor_next_mesh( r->GetID( ), f->dest );
   
   int vcBegin = 0, vcEnd = gNumVCs-1;
@@ -802,6 +807,8 @@ void dim_order_mesh( const Router *r, const Flit *f, int in_channel, OutputSet *
   }
   
   outputs->Clear();
+
+  cout << "outputset = " << out_port << "," << vcBegin << "," << vcEnd << "\n";
 
   outputs->AddRange( out_port, vcBegin, vcEnd );
 }
@@ -1154,6 +1161,161 @@ void min_adapt_mesh( const Router *r, const Flit *f, int in_channel, OutputSet *
       dest /= gK;
     }
   } 
+}
+
+void fault_tolerant_adaptive_mesh(const Router *r, const Flit *f, int in_channel, OutputSet *outputs, bool inject)
+{
+// #define DEBUG_FAULT_TOLERANT_ADAPTIVE
+
+#ifdef DEBUG_FAULT_TOLERANT_ADAPTIVE
+  if (r != NULL) {
+    cout << "fault_tolerant_adaptive_mesh: r->GetID(), f->vc, in_channel\n";
+    cout << r->GetID() << ", " << f->vc << ", " << in_channel << "\n";
+  }
+#endif
+
+  int vcBegin = 0, vcEnd = gNumVCs-1;
+  if ( f->type == Flit::READ_REQUEST ) {
+    vcBegin = gReadReqBeginVC;
+    vcEnd = gReadReqEndVC;
+  } else if ( f->type == Flit::WRITE_REQUEST ) {
+    vcBegin = gWriteReqBeginVC;
+    vcEnd = gWriteReqEndVC;
+  } else if ( f->type ==  Flit::READ_REPLY ) {
+    vcBegin = gReadReplyBeginVC;
+    vcEnd = gReadReplyEndVC;
+  } else if ( f->type ==  Flit::WRITE_REPLY ) {
+    vcBegin = gWriteReplyBeginVC;
+    vcEnd = gWriteReplyEndVC;
+  }
+  assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
+
+  if (f->vc == vcEnd) {
+    cout << "WARNING: not implemented\n";
+    // TODO: run deterministic DOR
+    // dim_order_mesh(r, f, in_channel, outputs, inject);
+    // outputs->vc_end = f->vc;
+    return;
+  }
+
+  outputs->Clear( );
+  
+  if (inject) {
+    outputs->AddRange(-1, vcBegin, vcBegin);
+    return;
+  } else if (r->GetID() == f->dest) {
+    // ejection can also use all VCs
+    outputs->AddRange(2*gN, vcBegin, vcEnd);
+    return;
+  }
+
+  // 1. Compute a list of productive channels (channel that moves closer to dest) and 
+  //    non-faulty channels (that isn't going backwards)
+  // 3. Pick dimension closest to current dimension (or lowest dimension)
+  vector<int> productive_ports;
+  vector<int> valid_ports;
+  int src_x = r->GetID() % gK;
+  int src_y = (r->GetID() % (gK * gK)) / gK;
+  int src_z = r->GetID() / (gK * gK);
+  int dest_x = f->dest % gK;
+  int dest_y = (f->dest % (gK * gK)) / gK;
+  int dest_z = f->dest / (gK * gK);
+
+#ifdef DEBUG_FAULT_TOLERANT_ADAPTIVE
+  cout << src_x << "," << src_y << "," << src_z << "\n";
+  cout << dest_x << "," << dest_y << "," << dest_z << "\n";
+#endif
+
+  // input channel: even = prev router right, odd = prev router left
+  // output port: even = right (positive), odd = left (negative)
+  if (src_x > 0 && !gIsBadRouter[r->GetID() - 1] && in_channel != 1) {
+    valid_ports.push_back(1);
+  }
+  if (src_x < gK - 1 && !gIsBadRouter[r->GetID() + 1] && in_channel != 0) {
+    valid_ports.push_back(0);
+  }
+  if (src_y > 0 && !gIsBadRouter[r->GetID() - gK] && in_channel != 3) {
+    valid_ports.push_back(3);
+  }
+  if (src_y < gK - 1 && !gIsBadRouter[r->GetID() + gK] && in_channel != 2) {
+    valid_ports.push_back(2);
+  }
+  if (src_z > 0 && !gIsBadRouter[r->GetID() - gK*gK] && in_channel != 5) {
+    valid_ports.push_back(5);
+  }
+  if (src_z < gK - 1 && !gIsBadRouter[r->GetID() + gK*gK] && in_channel != 4) {
+    valid_ports.push_back(4);
+  }
+
+  bitset<6> is_port_valid;
+  for (size_t i = 0; i < valid_ports.size(); i++) {
+    // cout << valid_ports[i] << "\n";
+    is_port_valid[valid_ports[i]] = true;
+  }
+  // cout << "TEST1: " << is_port_valid << "\n";
+
+  if (dest_x > src_x && is_port_valid[0]) {
+    productive_ports.push_back(0);
+  } else if (dest_x < src_x && is_port_valid[1]) {
+    productive_ports.push_back(1);
+  }
+  if (dest_y > src_y && is_port_valid[2]) {
+    productive_ports.push_back(2);
+  } else if (dest_y < src_y && is_port_valid[3]) {
+    productive_ports.push_back(3);
+  }
+  if (dest_z > src_z && is_port_valid[4]) {
+    productive_ports.push_back(4);
+  } else if (dest_z < src_z && is_port_valid[5]) {
+    productive_ports.push_back(5);
+  }
+  // for (size_t i = 0; i < productive_ports.size(); i++) {
+  //   cout << productive_ports[i] << "\n";
+  // }
+
+  int out_port = -1;
+  if (!productive_ports.empty()) {
+    if (in_channel >= 2*gN) { // flit was just injected
+      out_port = productive_ports[0];
+    } else if (in_channel == 0 || in_channel == 1) { // flit travelling in x direction
+      out_port = productive_ports[0];
+    } else if (in_channel == 2 || in_channel == 3) { // flit travelling in y direction
+      for (size_t i = 0; i < productive_ports.size(); i++) {
+        if (productive_ports[i] == 2 || productive_ports[i] == 3) {
+          out_port = productive_ports[i];
+          break;
+        }
+      }
+    } else if (in_channel == 4 || in_channel == 5) { // flit travelling in z direction
+      for (size_t i = 0; i < productive_ports.size(); i++) {
+        if (productive_ports[i] == 4 || productive_ports[i] == 5) {
+          out_port = productive_ports[i];
+          break;
+        }
+      }
+    }
+    if (out_port == -1) {
+      out_port = productive_ports[0];
+    }
+  } else {
+    int i = RandomInt(valid_ports.size() - 1);
+    out_port = valid_ports[i];
+  }
+
+#ifdef DEBUG_FAULT_TOLERANT_ADAPTIVE
+  cout << "outputset = " << out_port << "," << vcBegin << "," << vcEnd << "\n";
+#endif
+
+  // TODO: assign more than 1 VC per resource class
+  if (in_channel < 2*gN && out_port/2 < in_channel/2) {
+    // Update allowed VCs if switch to "lower" dimension
+    vcBegin = f->vc + 1;
+    vcEnd = f->vc + 1;
+  } else {
+    vcBegin = f->vc;
+    vcEnd = f->vc;
+  }
+  outputs->AddRange(out_port, vcBegin, vcEnd);
 }
 
 //=============================================================
@@ -2111,6 +2273,7 @@ void InitializeRoutingMap( const Configuration & config )
 
   gRoutingFunctionMap["min_adapt_mesh"]   = &min_adapt_mesh;
   gRoutingFunctionMap["min_adapt_torus"]  = &min_adapt_torus;
+  gRoutingFunctionMap["fault_tolerant_adaptive_mesh"]  = &fault_tolerant_adaptive_mesh;
 
   gRoutingFunctionMap["planar_adapt_mesh"] = &planar_adapt_mesh;
 

@@ -38,6 +38,7 @@ typedef void (*tRoutingFunction)( const Router *, const Flit *, int in_channel, 
 void InitializeRoutingMap( const Configuration & config );
 
 extern map<string, tRoutingFunction> gRoutingFunctionMap;
+extern bitset<1024> gIsBadRouter;
 
 extern int gNumVCs;
 extern int gReadReqBeginVC, gReadReqEndVC;

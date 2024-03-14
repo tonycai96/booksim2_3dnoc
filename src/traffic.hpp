@@ -46,6 +46,14 @@ public:
 			      Configuration const * const config = NULL);
 };
 
+class SinglePathTrafficPattern : public TrafficPattern {
+public:
+  SinglePathTrafficPattern(int nodes, int dst);
+  virtual int dest(int source);
+private:
+  int _dest_node;
+};
+
 class PermutationTrafficPattern : public TrafficPattern {
 protected:
   PermutationTrafficPattern(int nodes);

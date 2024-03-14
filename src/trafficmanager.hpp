@@ -66,6 +66,8 @@ protected:
 
   // ============ Traffic ============ 
 
+  int _src_router;
+
   int    _classes;
 
   vector<double> _load;
