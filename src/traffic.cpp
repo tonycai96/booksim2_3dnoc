@@ -28,6 +28,7 @@
 #include <iostream>
 #include <sstream>
 #include <ctime>
+#include <algorithm>
 #include "random_utils.hpp"
 #include "traffic.hpp"
 
@@ -63,10 +64,20 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
     }
   }
   vector<string> params = tokenize_str(param_str);
-  
+  vector<int> bad_router_vec;
+  bad_router_vec.push_back(1);
+  bad_router_vec.push_back(2);
+  bad_router_vec.push_back(5);
+  bad_router_vec.push_back(6);
+  bad_router_vec.push_back(17);
+  bad_router_vec.push_back(18);
+  bad_router_vec.push_back(21);
+  bad_router_vec.push_back(20);
   TrafficPattern * result = NULL;
   if (pattern_name == "single_path") {
     result = new SinglePathTrafficPattern(nodes, config->GetInt("dest_router"));
+  } else if(pattern_name == "removed_node_uniform"){
+    result = new RemovedNodeUniformTrafficPattern(nodes, bad_router_vec); //config->GetIntArray("bad_router"));
   } else if(pattern_name == "bitcomp") {
     result = new BitCompTrafficPattern(nodes);
   } else if(pattern_name == "transpose") {
@@ -209,6 +220,28 @@ SinglePathTrafficPattern::SinglePathTrafficPattern(int nodes, int dst) : Traffic
 int SinglePathTrafficPattern::dest(int source)
 {
   return _dest_node;
+}
+
+RemovedNodeUniformTrafficPattern::RemovedNodeUniformTrafficPattern(int nodes, vector<int> bad_router) : TrafficPattern(nodes){
+  _bad_router = bad_router;
+}
+int RemovedNodeUniformTrafficPattern::dest(int source){
+  assert((source >= 0) && (source < _nodes));
+  if (count(_bad_router.begin(), _bad_router.end(), source) > 0){
+    return source;
+  }
+  int dest = RandomInt(_nodes - 1);
+  while(count(_bad_router.begin(), _bad_router.end(), dest) > 0){
+    dest = RandomInt(_nodes - 1);
+  }
+  return dest;
+  // if(source == _bad_router)
+  //   return source;
+  // int dest = RandomInt(_nodes - 1);
+  // while(dest == _bad_router){
+  //   dest = RandomInt(_nodes - 1);
+  // }
+  // return dest;
 }
 
 PermutationTrafficPattern::PermutationTrafficPattern(int nodes)
@@ -440,6 +473,11 @@ RandomTrafficPattern::RandomTrafficPattern(int nodes)
 {
 
 }
+/*
+int UniformRandomTrafficPattern::dest(int source){
+
+}
+*/
 
 UniformRandomTrafficPattern::UniformRandomTrafficPattern(int nodes)
   : RandomTrafficPattern(nodes)

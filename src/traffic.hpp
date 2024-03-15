@@ -54,6 +54,14 @@ private:
   int _dest_node;
 };
 
+class RemovedNodeUniformTrafficPattern : public TrafficPattern {
+public:
+  RemovedNodeUniformTrafficPattern(int nodes, vector<int> bad_router);
+  virtual int dest(int source);
+private:
+  vector<int> _bad_router;
+};
+
 class PermutationTrafficPattern : public TrafficPattern {
 protected:
   PermutationTrafficPattern(int nodes);

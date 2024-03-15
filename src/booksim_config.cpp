@@ -315,9 +315,11 @@ BookSimConfig::BookSimConfig( )
   //==================Network file===========================
   AddStrField("network_file","");
 
-  _int_map["bad_router"] = -1;
+  //_int_map["bad_router"] = -1;
+  AddStrField("bad_router", "");
   _int_map["src_router"] = -1;
   _int_map["dest_router"] = -1;
+  
 
   _float_map["power_threshold"] = -1.0;
 }

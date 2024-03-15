@@ -113,9 +113,24 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
             Error("NOQ requires lookahead routing to be enabled.");
         }
     }
-
-    if (config.GetInt("bad_router") != -1) {
-        gIsBadRouter[config.GetInt("bad_router")] = true;
+    //Davis edits for multiple bad routers
+    // if (config.GetInt("bad_router") != -1) {
+    //     gIsBadRouter[config.GetInt("bad_router")] = true;
+    // }
+    //vector<int> bad_router_vector = config.GetIntArray("bad_router");
+    vector<int> bad_router_vec;
+    bad_router_vec.push_back(1);
+    bad_router_vec.push_back(2);
+    bad_router_vec.push_back(5);
+    bad_router_vec.push_back(6);
+    bad_router_vec.push_back(17);
+    bad_router_vec.push_back(18);
+    bad_router_vec.push_back(20);
+    bad_router_vec.push_back(21);
+    if (bad_router_vec.size() > 0){
+        for(int i = 0; i < bad_router_vec.size(); i++){
+            gIsBadRouter[bad_router_vec.at(i)] = true;
+        }
     }
 
     // ============ Traffic ============ 
