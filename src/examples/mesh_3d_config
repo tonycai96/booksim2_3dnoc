@@ -34,10 +34,10 @@ k = 4;
 n = 3;
 
 // Routing
-routing_function = adaptive_xy_yx_then_z;
+routing_function = dor;
 
 // Flow control
-num_vcs     = 8;
+num_vcs     = 1;
 vc_buf_size = 8;
 wait_for_tail_credit = 0;
 
@@ -57,8 +57,8 @@ internal_speedup  = 1.0;
 
 
 // Traffic
-traffic = uniform;
-packet_size = 34;
+traffic = bitcomp;
+packet_size = 10;
 
 
 // Simulation
@@ -66,12 +66,10 @@ warmup_periods = 20;
 max_samples = 40;
 sim_type = latency;
 sim_power = 1;
-channel_width = 768;
+channel_width = 512;
 power_threshold = 3.0;
-latency_thres = 2000.0;
-deadlock_warn_timeout=1000;
 
 tech_file = power/techfile.txt;
 stats_out = base.m;
 
-injection_rate = 0.001;
+injection_rate = 0.005;

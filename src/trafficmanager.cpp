@@ -31,6 +31,7 @@
 #include <limits>
 #include <cstdlib>
 #include <ctime>
+#include <queue>
 
 #include "booksim.hpp"
 #include "booksim_config.hpp"
@@ -41,6 +42,91 @@
 #include "packet_reply_info.hpp"
 #include "iq_router.hpp"
 #include "power_monitor.hpp"
+
+int dx[6] = {1, -1, 0, 0, 0, 0};
+int dy[6] = {0, 0, 1, -1, 0, 0};
+int dz[6] = {0, 0, 0, 0, 1, -1};
+int dist[1024][1024];
+
+void compute_deterministic_route(int _k) {
+    for (int i = 0; i < 1024; i++)
+    for (int j = 0; j < 1024; j++)
+        dist[i][j] = INT_MAX;
+
+    for (int src = 0; src < _k*_k*_k; src++) {
+        if (gIsBadRouter[src]) {
+            continue;
+        }
+        queue<pair<int, int>> Q;
+        Q.push({src, 0});
+        dist[src][src] = 0;
+        while (!Q.empty()) {
+            pair<int, int> cur = Q.front();
+            Q.pop();
+            int node_x = cur.first % _k;
+            int node_y = (cur.first % (_k * _k)) / _k;
+            int node_z = cur.first / (_k * _k);
+            for (int dir = 0; dir < 6; dir++) {
+                int nx = node_x + dx[dir], ny = node_y + dy[dir], nz = node_z + dz[dir];
+                if (nx >= 0 && nx < _k && ny >= 0 && ny < _k && nz >= 0 && nz < _k) {
+                    int next_node = nx + ny*_k + nz*_k*_k;
+                    if (gIsBadRouter[next_node]) continue;
+                    // if (cur.dr + t < global_best_dr[src][next_node][sdir]) {
+                    //     global_best_dr[src][next_node][sdir] = cur.dr + t;
+                    //     Q.emplace(next_node, dir, global_best_dr[src][next_node][sdir]);
+                    // }
+                    if (dist[src][next_node] == INT_MAX) {
+                        dist[src][next_node] = cur.second + 1;
+                        Q.push({next_node, cur.second + 1});
+                    }
+                }
+            }
+        }
+    }
+
+    for (int src = 0; src < _k*_k*_k; src++) {
+        for (int dest = 0; dest < _k*_k*_k; dest++) {
+            if (gIsBadRouter[src] || gIsBadRouter[dest]) continue;
+            for (int dir = 0; dir < 6; dir++) {
+                int node_x = src % _k;
+                int node_y = (src % (_k * _k)) / _k;
+                int node_z = src / (_k * _k);
+                int nx = node_x + dx[dir], ny = node_y + dy[dir], nz = node_z + dz[dir];
+                if (nx >= 0 && nx < _k && ny >= 0 && ny < _k && nz >= 0 && nz < _k) {
+                    int next_node = nx + ny*_k + nz*_k*_k;
+                    if (gIsBadRouter[next_node]) continue;
+                    if (dist[src][dest] > dist[next_node][dest]) {
+                        gDeterministicRoute[src][dest] = dir;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    gNumDeterministicVCs = 1;
+    for (int src = 0; src < _k*_k*_k; src++) {
+        for (int dest = 0; dest < _k*_k*_k; dest++) {
+            if (gIsBadRouter[src] || gIsBadRouter[dest]) continue;
+            int cur = src;
+            int prev_dir = 0;
+            int vc_used = 1;
+            while (cur != dest) {
+                int dir = gDeterministicRoute[cur][dest];
+                if (dir/2 < prev_dir/2) vc_used++;
+                prev_dir = dir;
+
+                int node_x = cur % _k;
+                int node_y = (cur % (_k * _k)) / _k;
+                int node_z = cur / (_k * _k);
+                int nx = node_x + dx[dir], ny = node_y + dy[dir], nz = node_z + dz[dir];
+                int next_node = nx + ny*_k + nz*_k*_k;
+                cur = next_node;
+            }
+            gNumDeterministicVCs = max(gNumDeterministicVCs, vc_used);
+        }
+    }
+}
 
 TrafficManager * TrafficManager::New(Configuration const & config,
                                      vector<Network *> const & net)
@@ -118,20 +204,35 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     //     gIsBadRouter[config.GetInt("bad_router")] = true;
     // }
     //vector<int> bad_router_vector = config.GetIntArray("bad_router");
-    vector<int> bad_router_vec;
-    bad_router_vec.push_back(1);
-    bad_router_vec.push_back(2);
-    bad_router_vec.push_back(5);
-    bad_router_vec.push_back(6);
-    bad_router_vec.push_back(17);
-    bad_router_vec.push_back(18);
-    bad_router_vec.push_back(20);
-    bad_router_vec.push_back(21);
-    if (bad_router_vec.size() > 0){
-        for(int i = 0; i < bad_router_vec.size(); i++){
-            gIsBadRouter[bad_router_vec.at(i)] = true;
+    if (config.GetInt("disable_some_routers") == 1) {
+        vector<int> bad_router_vec;
+        bad_router_vec.push_back(1);
+        bad_router_vec.push_back(2);
+        bad_router_vec.push_back(5);
+        bad_router_vec.push_back(6);
+        bad_router_vec.push_back(17);
+        bad_router_vec.push_back(18);
+        bad_router_vec.push_back(20);
+        bad_router_vec.push_back(21);
+        if (bad_router_vec.size() > 0){
+            for(int i = 0; i < bad_router_vec.size(); i++){
+                gIsBadRouter[bad_router_vec.at(i)] = true;
+            }
         }
     }
+
+    vector<Router*> routers = _net[0]->GetRouters();
+    for (size_t i = 0; i < routers.size(); i++) {
+        if (RandomFloat(1.0) < config.GetFloat("frac_throttled")) {
+            routers[i]->_throttleRate = 0.5;
+        }
+    }
+    
+    gUseAdaptive = 0;
+    gUseDeterministic = 0;
+    compute_deterministic_route(config.GetInt("k"));
+
+    cout << "gNumDeterministicVCs = " << gNumDeterministicVCs << "\n";
 
     // ============ Traffic ============ 
 
@@ -2121,6 +2222,9 @@ void TrafficManager::DisplayStats(ostream & os) const {
 }
 
 void TrafficManager::DisplayOverallStats( ostream & os ) const {
+
+    cout << "useAdaptive = " << gUseAdaptive << "\n";
+    cout << "useDeterministic = " << gUseDeterministic << "\n";
 
     os << "====== Overall Traffic Statistics ======" << endl;
     for ( int c = 0; c < _classes; ++c ) {

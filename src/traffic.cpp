@@ -63,21 +63,25 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
       param_str = pattern.substr(left+1, right-left-1);
     }
   }
-  vector<string> params = tokenize_str(param_str);
   vector<int> bad_router_vec;
-  bad_router_vec.push_back(1);
-  bad_router_vec.push_back(2);
-  bad_router_vec.push_back(5);
-  bad_router_vec.push_back(6);
-  bad_router_vec.push_back(17);
-  bad_router_vec.push_back(18);
-  bad_router_vec.push_back(21);
-  bad_router_vec.push_back(20);
+  vector<string> params = tokenize_str(param_str);
+  if (config->GetInt("disable_some_routers") == 1) {
+    bad_router_vec.push_back(1);
+    bad_router_vec.push_back(2);
+    bad_router_vec.push_back(5);
+    bad_router_vec.push_back(6);
+    bad_router_vec.push_back(17);
+    bad_router_vec.push_back(18);
+    bad_router_vec.push_back(21);
+    bad_router_vec.push_back(20);
+  }
   TrafficPattern * result = NULL;
   if (pattern_name == "single_path") {
     result = new SinglePathTrafficPattern(nodes, config->GetInt("dest_router"));
   } else if(pattern_name == "removed_node_uniform"){
     result = new RemovedNodeUniformTrafficPattern(nodes, bad_router_vec); //config->GetIntArray("bad_router"));
+  } else if(pattern_name == "removed_node_bitcomp") {
+    result = new BitCompTrafficPatternRemovedNodes(nodes, bad_router_vec);
   } else if(pattern_name == "bitcomp") {
     result = new BitCompTrafficPattern(nodes);
   } else if(pattern_name == "transpose") {
@@ -263,7 +267,6 @@ BitPermutationTrafficPattern::BitPermutationTrafficPattern(int nodes)
 BitCompTrafficPattern::BitCompTrafficPattern(int nodes)
   : BitPermutationTrafficPattern(nodes)
 {
-  
 }
 
 int BitCompTrafficPattern::dest(int source)
@@ -271,6 +274,25 @@ int BitCompTrafficPattern::dest(int source)
   assert((source >= 0) && (source < _nodes));
   int const mask = _nodes - 1;
   return ~source & mask;
+}
+
+BitCompTrafficPatternRemovedNodes::BitCompTrafficPatternRemovedNodes(int nodes, vector<int> bad_routers)
+  : BitPermutationTrafficPattern(nodes)
+{
+  for (size_t i = 0; i < bad_routers.size(); i++) {
+    _is_bad_router[bad_routers[i]] = true;
+  }
+}
+
+int BitCompTrafficPatternRemovedNodes::dest(int source)
+{
+  assert((source >= 0) && (source < _nodes));
+  int const mask = _nodes - 1;
+  int dest = ~source & mask;
+  if (_is_bad_router[dest] || _is_bad_router[source]) {
+    return source;
+  }
+  return dest;
 }
 
 TransposeTrafficPattern::TransposeTrafficPattern(int nodes)

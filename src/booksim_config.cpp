@@ -319,7 +319,10 @@ BookSimConfig::BookSimConfig( )
   AddStrField("bad_router", "");
   _int_map["src_router"] = -1;
   _int_map["dest_router"] = -1;
-  
+
+
+  _int_map["disable_some_routers"] = 0;
+  _float_map["frac_throttled"] = 0.0;
 
   _float_map["power_threshold"] = -1.0;
 }

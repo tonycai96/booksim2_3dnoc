@@ -52,9 +52,13 @@
 #include "cmesh.hpp"
 
 
+int gUseAdaptive;
+int gUseDeterministic;
 
 map<string, tRoutingFunction> gRoutingFunctionMap;
 bitset<1024> gIsBadRouter;
+int gDeterministicRoute[1024][1024];
+int gNumDeterministicVCs;
 
 /* Global information used by routing functions */
 
@@ -773,9 +777,9 @@ void dor_next_torus( int cur, int dest, int in_port,
 
 void dim_order_mesh( const Router *r, const Flit *f, int in_channel, OutputSet *outputs, bool inject )
 {
-  if (r != NULL) {
-    cout << "dim_order_mesh " << r->GetID() << " " << in_channel << " " << f->dest << "\n";
-  }
+  // if (r != NULL) {
+  //   cout << "dim_order_mesh " << r->GetID() << " " << in_channel << " " << f->dest << "\n";
+  // }
   int out_port = inject ? -1 : dor_next_mesh( r->GetID( ), f->dest );
   
   int vcBegin = 0, vcEnd = gNumVCs-1;
@@ -808,7 +812,7 @@ void dim_order_mesh( const Router *r, const Flit *f, int in_channel, OutputSet *
   
   outputs->Clear();
 
-  cout << "outputset = " << out_port << "," << vcBegin << "," << vcEnd << "\n";
+  // cout << "outputset = " << out_port << "," << vcBegin << "," << vcEnd << "\n";
 
   outputs->AddRange( out_port, vcBegin, vcEnd );
 }
@@ -1163,6 +1167,53 @@ void min_adapt_mesh( const Router *r, const Flit *f, int in_channel, OutputSet *
   } 
 }
 
+void fault_tolerant_deterministic_mesh(const Router *r, const Flit *f, int in_channel, OutputSet *outputs, bool inject)
+{
+// #define DEBUG_FAULT_TOLERANT_DETERMINISTIC
+
+#ifdef DEBUG_FAULT_TOLERANT_DETERMINISTIC
+  if (r != NULL) {
+    cout << "fault_tolerant_deterministic_mesh: r->GetID(), f->vc, in_channel\n";
+    cout << r->GetID() << ", " << f->vc << ", " << in_channel << "\n";
+  }
+#endif
+
+  int vcBegin = 0, vcEnd = gNumVCs-1;
+  if ( f->type == Flit::READ_REQUEST ) {
+    vcBegin = gReadReqBeginVC;
+    vcEnd = gReadReqEndVC;
+  } else if ( f->type == Flit::WRITE_REQUEST ) {
+    vcBegin = gWriteReqBeginVC;
+    vcEnd = gWriteReqEndVC;
+  } else if ( f->type ==  Flit::READ_REPLY ) {
+    vcBegin = gReadReplyBeginVC;
+    vcEnd = gReadReplyEndVC;
+  } else if ( f->type ==  Flit::WRITE_REPLY ) {
+    vcBegin = gWriteReplyBeginVC;
+    vcEnd = gWriteReplyEndVC;
+  }
+  assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
+
+  outputs->Clear( );
+  
+  if (inject) {
+    outputs->AddRange(-1, vcBegin, vcBegin);
+    return;
+  } else if (r->GetID() == f->dest) {
+    // ejection can also use all VCs
+    outputs->AddRange(2*gN, vcBegin, vcEnd);
+    return;
+  }
+
+  int out_port = gDeterministicRoute[r->GetID()][f->dest];
+  // vcBegin = vcEnd = (out_port/2 < in_channel/2) ? f->vc + 1 : f->vc;
+  #ifdef DEBUG_FAULT_TOLERANT_DETERMINISTIC
+    cout << "outputset = " << out_port << "," << vcBegin << "," << vcEnd << "\n";
+  #endif
+  outputs->AddRange(out_port, vcBegin, vcEnd);
+  return;
+}
+
 void fault_tolerant_adaptive_mesh(const Router *r, const Flit *f, int in_channel, OutputSet *outputs, bool inject)
 {
 // #define DEBUG_FAULT_TOLERANT_ADAPTIVE
@@ -1190,14 +1241,6 @@ void fault_tolerant_adaptive_mesh(const Router *r, const Flit *f, int in_channel
   }
   assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
 
-  if (f->vc == vcEnd) {
-    cout << "WARNING: not implemented\n";
-    // TODO: run deterministic DOR
-    // dim_order_mesh(r, f, in_channel, outputs, inject);
-    // outputs->vc_end = f->vc;
-    return;
-  }
-
   outputs->Clear( );
   
   if (inject) {
@@ -1209,6 +1252,19 @@ void fault_tolerant_adaptive_mesh(const Router *r, const Flit *f, int in_channel
     return;
   }
 
+  if (f->vc >= vcEnd - gNumDeterministicVCs + 1) {
+    gUseDeterministic++;
+  // if (f->vc >= vcEnd - gNumDeterministicVCs + 1) {
+    int out_port = gDeterministicRoute[r->GetID()][f->dest];
+    vcBegin = vcEnd = (out_port/2 < in_channel/2) ? f->vc + 1 : f->vc;
+    #ifdef DEBUG_FAULT_TOLERANT_ADAPTIVE
+      cout << "outputset = " << out_port << "," << vcBegin << "," << vcEnd << "\n";
+    #endif
+    outputs->AddRange(out_port, vcBegin, vcEnd);
+    return;
+  }
+
+  gUseAdaptive++;
   // 1. Compute a list of productive channels (channel that moves closer to dest) and 
   //    non-faulty channels (that isn't going backwards)
   // 3. Pick dimension closest to current dimension (or lowest dimension)
@@ -1249,10 +1305,8 @@ void fault_tolerant_adaptive_mesh(const Router *r, const Flit *f, int in_channel
 
   bitset<6> is_port_valid;
   for (size_t i = 0; i < valid_ports.size(); i++) {
-    // cout << valid_ports[i] << "\n";
     is_port_valid[valid_ports[i]] = true;
   }
-  // cout << "TEST1: " << is_port_valid << "\n";
 
   if (dest_x > src_x && is_port_valid[0]) {
     productive_ports.push_back(0);
@@ -1269,37 +1323,38 @@ void fault_tolerant_adaptive_mesh(const Router *r, const Flit *f, int in_channel
   } else if (dest_z < src_z && is_port_valid[5]) {
     productive_ports.push_back(5);
   }
-  // for (size_t i = 0; i < productive_ports.size(); i++) {
-  //   cout << productive_ports[i] << "\n";
-  // }
 
   int out_port = -1;
   if (!productive_ports.empty()) {
-    if (in_channel >= 2*gN) { // flit was just injected
-      out_port = productive_ports[0];
-    } else if (in_channel == 0 || in_channel == 1) { // flit travelling in x direction
-      out_port = productive_ports[0];
-    } else if (in_channel == 2 || in_channel == 3) { // flit travelling in y direction
-      for (size_t i = 0; i < productive_ports.size(); i++) {
-        if (productive_ports[i] == 2 || productive_ports[i] == 3) {
-          out_port = productive_ports[i];
-          break;
-        }
-      }
-    } else if (in_channel == 4 || in_channel == 5) { // flit travelling in z direction
-      for (size_t i = 0; i < productive_ports.size(); i++) {
-        if (productive_ports[i] == 4 || productive_ports[i] == 5) {
-          out_port = productive_ports[i];
-          break;
-        }
-      }
-    }
-    if (out_port == -1) {
-      out_port = productive_ports[0];
-    }
+    // if (in_channel >= 2*gN) { // flit was just injected
+    //   out_port = productive_ports[0];
+    // } else if (in_channel == 0 || in_channel == 1) { // flit travelling in x direction
+    //   out_port = productive_ports[0];
+    // } else if (in_channel == 2 || in_channel == 3) { // flit travelling in y direction
+    //   for (size_t i = 0; i < productive_ports.size(); i++) {
+    //     if (productive_ports[i] == 2 || productive_ports[i] == 3) {
+    //       out_port = productive_ports[i];
+    //       break;
+    //     }
+    //   }
+    // } else if (in_channel == 4 || in_channel == 5) { // flit travelling in z direction
+    //   for (size_t i = 0; i < productive_ports.size(); i++) {
+    //     if (productive_ports[i] == 4 || productive_ports[i] == 5) {
+    //       out_port = productive_ports[i];
+    //       break;
+    //     }
+    //   }
+    // }
+    // if (out_port == -1) {
+    //   out_port = productive_ports[0];
+    // }
+    out_port = *min_element(productive_ports.begin(), productive_ports.end(), [&r](int p1, int p2) {
+      return r->GetUsedCredit(p1) < r->GetUsedCredit(p2);
+    });
   } else {
-    int i = RandomInt(valid_ports.size() - 1);
-    out_port = valid_ports[i];
+    out_port = *min_element(valid_ports.begin(), valid_ports.end(), [&r](int p1, int p2) {
+      return r->GetUsedCredit(p1) < r->GetUsedCredit(p2);
+    });
   }
 
 #ifdef DEBUG_FAULT_TOLERANT_ADAPTIVE
@@ -2274,6 +2329,7 @@ void InitializeRoutingMap( const Configuration & config )
   gRoutingFunctionMap["min_adapt_mesh"]   = &min_adapt_mesh;
   gRoutingFunctionMap["min_adapt_torus"]  = &min_adapt_torus;
   gRoutingFunctionMap["fault_tolerant_adaptive_mesh"]  = &fault_tolerant_adaptive_mesh;
+  gRoutingFunctionMap["fault_tolerant_deterministic_mesh"]  = &fault_tolerant_deterministic_mesh;
 
   gRoutingFunctionMap["planar_adapt_mesh"] = &planar_adapt_mesh;
 

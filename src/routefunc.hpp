@@ -39,6 +39,10 @@ void InitializeRoutingMap( const Configuration & config );
 
 extern map<string, tRoutingFunction> gRoutingFunctionMap;
 extern bitset<1024> gIsBadRouter;
+extern int gDeterministicRoute[1024][1024];
+extern int gNumDeterministicVCs;
+extern int gUseAdaptive;
+extern int gUseDeterministic;
 
 extern int gNumVCs;
 extern int gReadReqBeginVC, gReadReqEndVC;

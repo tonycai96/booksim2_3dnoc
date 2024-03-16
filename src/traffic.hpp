@@ -31,6 +31,7 @@
 #include <vector>
 #include <set>
 #include "config_utils.hpp"
+#include <bitset>
 
 using namespace std;
 
@@ -76,6 +77,15 @@ class BitCompTrafficPattern : public BitPermutationTrafficPattern {
 public:
   BitCompTrafficPattern(int nodes);
   virtual int dest(int source);
+};
+
+class BitCompTrafficPatternRemovedNodes : public BitPermutationTrafficPattern {
+public:
+  BitCompTrafficPatternRemovedNodes(int nodes, vector<int> bad_routers);
+  virtual int dest(int source);
+
+private:
+  bitset<1024> _is_bad_router;
 };
 
 class TransposeTrafficPattern : public BitPermutationTrafficPattern {
